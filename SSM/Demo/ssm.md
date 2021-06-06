@@ -970,7 +970,7 @@ desc user;
 select * from book;
 
 --删除
-
+delete from book where id=20;
 
 ~~~
 
@@ -1010,8 +1010,10 @@ auto_increment
 # 五、可以完善的点
 
 ~~~
-检验用户名是否重复
+检验(用户名是否)重复
 
 拦截器验证权限
+
+借书和还书的是否是同一个人
 ~~~
 
